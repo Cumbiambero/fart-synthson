@@ -1,0 +1,27 @@
+{
+  "slug": "FartSimpson",
+  "name": "FartSimpson",
+  "version": "2.0.0",
+  "license": "GPL-3.0-or-later",
+  "brand": "Instrumentalist",
+  "author": "Eduardo Hahn Paredes",
+  "authorEmail": "cumbiamberos@gmail.com",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "https://github.com/Cumbiambero/fart-simpson",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "FartSimpson",
+      "name": "FartSimpson",
+      "description": "Not a module for love songs",
+      "manualUrl": "",
+      "tags": [
+        "Synth voice",
+        "Oscillator"
+      ]
+    }
+  ]
+}

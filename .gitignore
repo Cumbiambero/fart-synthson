@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+*.o
+*.d
+*.dll
+*.so
+*.dylib
+
+.vscode/
+*.code-workspace
+
+dist/
+
+*~
+.DS_Store
+Thumbs.db
+
+doctest.h
+layout_editable.svg
