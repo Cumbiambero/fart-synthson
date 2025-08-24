@@ -4,6 +4,6 @@
 
 This is not in a usable state yet.
 
-Here a very simole, percussion VCV Rack Module is beeing created.
+Here a very simple, percussion VCV Rack Module is beeing created.
 
 Coming soon!
