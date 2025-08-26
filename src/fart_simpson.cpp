@@ -1,67 +1,87 @@
 #include "fart_simpson.hpp"
 #include <cmath>
+#include <algorithm>
 
-using namespace rack;
+struct Voice {
+  bool active = false;
+  float t = 0.f;
+  float phase = 0.f;
+  float env = 0.f;
+};
+
+static float randomUniform() {
+  return (float)rand() / (float)RAND_MAX;
+}
+
 
 void FartSimpson::process(const ProcessArgs& args) {
-    static int paramCounter = 0;
-    static struct ParamCache {
-        float age, urgency, alimentation, loudness, wetness, length, pitch, flutter;
-    } cache;
-    if (paramCounter++ % 64 == 0) {
-        cache.age = std::clamp(params[AGE_PARAM].getValue() + inputs[AGE_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.urgency = std::clamp(params[URGENCY_PARAM].getValue() + inputs[URGENCY_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.alimentation = std::clamp(params[FOOD_PARAM].getValue() + inputs[ALIMENTATION_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.loudness = std::clamp(params[LOUDNESS_PARAM].getValue() + inputs[LOUDNESS_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.wetness = std::clamp(params[WETNESS_PARAM].getValue() + inputs[WETNESS_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.length = std::clamp(params[LENGTH_PARAM].getValue() + inputs[LENGTH_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.pitch = std::clamp(params[INTENSION_PARAM].getValue() + inputs[PITCH_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-        cache.flutter = std::clamp(params[FLUTTER_PARAM].getValue() + inputs[FLUTTER_CV_INPUT].getVoltage() / 10.f, 0.f, 1.f);
-    }
-    const auto& [age, urgency, alimentation, loudness, wetness, length, pitch, flutter] = cache;
+  static Voice voice;
+  static int frame = 0;
+  static float age = 50.f, urgency = 0.5f, retention = 0.5f, shame = 0.f, surprise = 0.5f, food = 0.5f;
 
-    bool gate = inputs[GATE_INPUT].getVoltage() > 1.f;
-    bool trig = inputs[TRIGGER_INPUT].getVoltage() > 1.f;
-    bool button = params[BUTTON_PARAM].getValue() > 0.5f || inputs[BUTTON_INPUT].getVoltage() > 1.f;
-    static bool farting = false;
-    static float fartPhase = 0.f;
-    static float fartLength = 0.f;
-    static float lastOut = 0.f;
+  readParams(frame, age, urgency, retention, shame, surprise, food);
 
-    if ((gate || trig || button) && !farting) {
-        farting = true;
-        fartPhase = 0.f;
-        fartLength = 0.2f + length * 1.8f;
-        lastOut = 0.f;
-    }
-    if (!gate && !trig && !button && farting && fartPhase > fartLength) {
-        farting = false;
-    }
+  bool gate = inputs[TRIGGER_INPUT].getVoltage() > 1.f || params[BUTTON_PARAM].getValue() > 0.5f || inputs[BUTTON_INPUT].getVoltage() > 1.f;
+  static bool prevGate = false;
 
-    float out = 0.f;
-    if (farting) {
-        float t = fartPhase;
-        constexpr float pi = static_cast<float>(M_PI);
-        float basePitch = 40.f + pitch * 120.f;
-        float foodLfo = std::sin(2.f * pi * t * (0.2f + alimentation * 2.5f));
-        float flutterLfo = std::sin(2.f * pi * t * (0.05f + flutter * 1.5f));
-        float freq = basePitch * (1.f - 0.5f * age) + foodLfo * 8.f + flutterLfo * 16.f;
-        float envAttack = std::min(1.f, t / (0.01f + 0.09f * (1.f - urgency)));
-        float envDecay = std::exp(-t / (0.2f + 0.6f * (1.f - urgency)));
-        float env = envAttack * envDecay;
-        float squelch = wetness * std::sin(2.f * pi * t * (1.2f + wetness * 3.f)) * (0.7f + wetness * 0.6f);
-        float liquid = wetness * (std::sin(2.f * pi * t * (8.f + wetness * 32.f + alimentation * 10.f)) * 0.5f + std::sin(2.f * pi * t * (13.f + wetness * 20.f)) * 0.3f);
-        float noise = (random::uniform() * 2.f - 1.f) * (0.15f + wetness * 0.7f) * (1.f - age * 0.7f);
-        float osc = std::sin(2.f * pi * freq * t) * (1.f - age * 0.8f);
-        float raw = (osc + squelch + noise + liquid) * env * loudness * 5.f;
-        float cutoff = 800.f + wetness * 1200.f - age * 600.f;
-        float RC = 1.f / (2.f * pi * cutoff);
-        float alpha = args.sampleTime / (RC + args.sampleTime);
-        out = lastOut + alpha * (raw - lastOut);
-        lastOut = out;
-        fartPhase += args.sampleTime;
+  float sampleRate = args.sampleRate;
+  float dt = args.sampleTime;
+
+  if (gate && !prevGate) {
+    voice.active = true;
+    voice.t = 0.f;
+    voice.phase = 0.f;
+    voice.env = 0.f;
+  }
+  prevGate = gate;
+
+  float out = 0.f;
+  float shameGain = 1.f - shame;
+  shameGain *= shameGain;
+
+  if (voice.active) {
+    voice.t += dt;
+
+    float baseFreq = 120.f - (age / 100.f) * 70.f;
+    float attack = 0.02f + (1.f - urgency) * 0.08f;
+    float decay = 0.25f + (1.f - urgency) * 0.3f;
+    float env = 0.f;
+    if (voice.t < attack) {
+      env = (voice.t / attack) * (0.7f + urgency * 0.6f);
     } else {
-        lastOut = 0.f;
+      env = std::exp(-(voice.t - attack) / decay);
     }
-    outputs[AUDIO_OUTPUT].setVoltage(out);
+    voice.env = env;
+
+    float wideLFO = std::sin(2.f * (float)M_PI * voice.t * (0.5f + retention * 4.0f));
+    float narrowLFO = std::sin(2.f * (float)M_PI * voice.t * (8.f + food * 32.f));
+
+    float pitch = baseFreq * (1.f + wideLFO * retention * 0.2f + narrowLFO * food * 0.05f);
+    voice.phase += pitch * dt;
+    if (voice.phase > 1.f) voice.phase -= 1.f;
+
+    float core = std::tanh(std::sin(2.f * (float)M_PI * voice.phase));
+    float noise = (randomUniform() * 2.f - 1.f) * (0.1f + surprise * 0.6f);
+    float wet = std::sin(2.f * (float)M_PI * voice.phase * (2.5f + food * 2.f)) * (0.1f + food * 0.5f);
+
+    out = (core + noise + wet) * env * shameGain * 5.f;
+
+    if (env < 0.001f) {
+      voice.active = false;
+    }
+  }
+
+  outputs[AUDIO_OUTPUT].setVoltage(out);
+}
+
+void FartSimpson::readParams(int &frame, float &age, float &urgency, float &retention, float &shame, float &surprise, float &food)
+{
+if ((frame++ & 63) == 0) {
+    age = std::clamp(params[AGE_PARAM].getValue() + std::clamp(inputs[AGE_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f) * 100.f, 0.f, 100.f);
+    urgency = std::clamp(params[URGENCY_PARAM].getValue() + std::clamp(inputs[URGENCY_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f), 0.f, 1.f);
+    retention = std::clamp(params[RETENTION_PARAM].getValue() + std::clamp(inputs[RETENTION_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f), 0.f, 1.f);
+    shame = std::clamp(params[SHAME_PARAM].getValue() + std::clamp(inputs[SHAME_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f), 0.f, 1.f);
+    surprise = std::clamp(params[SURPRISE_PARAM].getValue() + std::clamp(inputs[SURPRISE_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f), 0.f, 1.f);
+    food = std::clamp(params[FOOD_PARAM].getValue() + std::clamp(inputs[FOOD_CV_INPUT].getVoltage() / 10.f, -1.f, 1.f), 0.f, 1.f);
+  }
 }
