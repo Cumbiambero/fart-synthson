@@ -32,6 +32,8 @@ struct FartSimpson : Module {
         NUM_OUTPUTS
     };
 
+    static int frame;
+
     FartSimpson() {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, 0);
         configParam(AGE_PARAM, 0.f, 100.f, 50.f, "Age");
@@ -51,10 +53,9 @@ struct FartSimpson : Module {
         configInput(TRIGGER_INPUT, "Let it out (Clock)");
 
         configOutput(AUDIO_OUTPUT, "Audio Output");
-
     }
 
     void process(const ProcessArgs &args) override;
-    void readParams(int &frame, float &age, float &urgency, float &retention,
-                    float &shame, float &surprise, float &food);
+    void readKnobs(float &age, float &urgency, float &retention,float &shame, float &surprise, float &food);
+    void readInputs(float &ageCV, float &urgencyCV, float &retentionCV, float &shameCV, float &surpriseCV, float &foodCV);
 };
