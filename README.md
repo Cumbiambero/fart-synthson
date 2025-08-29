@@ -1,9 +1,3 @@
-# Fart Simpson #
+# Fart Synthson
 
-(or Synthson, not sure yet)
-
-This is not in a usable state yet.
-
-Here a very simple, percussion VCV Rack Module is beeing created.
-
-Coming soon!
+A very simple drum module for VCV Rack. Don't take it too seriously.

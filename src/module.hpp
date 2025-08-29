@@ -3,9 +3,9 @@
 
 using namespace rack;
 
-extern Model* modelFartSimpson;
+extern Model* modelFartSynthson;
 
-struct FartSimpson : Module {
+struct FartSynthson : Module {
     enum ParamIds {
         AGE_PARAM,
         URGENCY_PARAM,
@@ -34,7 +34,7 @@ struct FartSimpson : Module {
 
     static int frame;
 
-    FartSimpson() {
+    FartSynthson() {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, 0);
         configParam(AGE_PARAM, 0.f, 100.f, 50.f, "Age");
         configParam(URGENCY_PARAM, 0.f, 1.f, 0.5f, "Urgency");

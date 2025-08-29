@@ -3,6 +3,6 @@
 
 
 extern rack::plugin::Plugin* pluginInstance;
-extern rack::Model* modelFartSimpson;
+extern rack::Model* modelFartSynthson;
 
-#include "fart_simpson.hpp"
+#include "module.hpp"
