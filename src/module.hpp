@@ -65,7 +65,7 @@ struct FartSynthson final : rack::Module {
     void process(const ProcessArgs &args) override;
 
 private:
-    static constexpr float pi = std::numbers::pi_v<float>;
+    static constexpr float pi = 3.14159265358979323846f;
     static constexpr float two_pi = 2.f * pi;
     uint32_t rngState = 0x12345678u;
     int frameCounter = 0;
