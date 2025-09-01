@@ -48,14 +48,14 @@ struct FartSynthson final : rack::Module {
         configParam(AGE_PARAM, 0.f, 100.f, 50.f, "Age");
         configParam(URGENCY_PARAM, 0.f, 1.f, 0.5f, "Urgency");
         configParam(RETENTION_PARAM, 0.f, 1.f, 0.5f, "Retention");
-        configParam(SHAME_PARAM, 0.f, 1.f, 0.f, "Shame (0 loud, 1 silent)");
+        configParam(SHAME_PARAM, 0.f, 1.f, 0.f, "Shame");
         configParam(SURPRISE_PARAM, 0.f, 1.f, 0.5f, "Surprise");
-        configParam(FOOD_PARAM, 0.f, 1.f, 0.5f, "Food (wetness)");
+        configParam(FOOD_PARAM, 0.f, 1.f, 0.5f, "Food");
         configParam(BUTTON_PARAM, 0.f, 1.f, 0.f, "Let it out");
         configInput(AGE_CV_INPUT,  "Age (CV)");
         configInput(URGENCY_CV_INPUT, "Urgency (CV)");
         configInput(RETENTION_CV_INPUT, "Retention (CV)");
-        configInput(SHAME_CV_INPUT, "Shame (0 loud, 1 silent) (CV)");
+        configInput(SHAME_CV_INPUT, "Shame (CV)");
         configInput(SURPRISE_CV_INPUT, "Surprise (CV)");
         configInput(FOOD_CV_INPUT, "Food (CV)");
         configInput(TRIGGER_INPUT, "Let it out (Clock)");
@@ -163,9 +163,7 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   pitchLFO = 1.f + 0.08f * fastSin(two_pi * pitchLFOPhase);
   float wideLFO = fastSin(two_pi * t * (0.3f + retentionF * 2.f));
   float narrowLFO = fastSin(two_pi * t * (3.f + foodF * 10.f));
-  float pitch =
-      baseFreq * pitchLFO *
-      (1.f + wideLFO * retentionF * 0.25f + narrowLFO * foodF * 0.08f);
+  float pitch = baseFreq * pitchLFO * (1.f + wideLFO * retentionF * 0.25f + narrowLFO * foodF * 0.08f);
   phase += (pitch + pitchRand * pitch * 0.1f) * dt;
   wrap(phase);
   float core = fastTanh(fastSin(two_pi * phase));
@@ -177,8 +175,9 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   float pink = (pink1 + pink2 + pink3) * 0.3333f;
   float noiseColor = foodF * 0.6f + 0.2f;
   float noise = (brown * (1.f - noiseColor) + pink * noiseColor) * (0.18f + surpriseF * 0.7f);
-  float wet =
-      fastSin(two_pi * phase * (1.5f + foodF * 2.5f)) * (0.12f + foodF * 0.6f);
+  float wetResGain = 0.4f + urgencyF * 0.6f;
+  float wetFreq = 1.5f + foodF * (2.5f + urgencyF * 1.2f);
+  float wet = fastSin(two_pi * phase * wetFreq) * (0.12f + foodF * 0.6f) * wetResGain;
   if (bubbleEnv < 0.001f && frand() < (0.008f + foodF * 0.03f + surpriseF * 0.01f)) {
     bubbleEnvTarget = 0.35f + foodF * 0.65f;
     bubblePhase = 0.f;
