@@ -79,6 +79,14 @@ private:
     float brown = 0.f;
     float bubbleEnv = 0.f;
     float bubblePhase = 0.f;
+  float pink1 = 0.f, pink2 = 0.f, pink3 = 0.f;
+  float pressureEnv = 0.f;
+  float burstEnv = 0.f;
+  float formantEnv = 0.f;
+  float formantPhase = 0.f;
+  float ampRand = 0.f, ampRandTarget = 0.f;
+  float pitchRand = 0.f, pitchRandTarget = 0.f;
+  float randTimer = 0.f, randInterval = 0.03f;
     bool gatePrev = false;
     float ageV = 50.f, urgencyV = 0.5f, retentionV = 0.5f, shameV = 0.f, surpriseV = 0.5f, foodV = 0.5f;
     float ageCV = 0.f, urgencyCV = 0.f, retentionCV = 0.f, shameCV = 0.f, surpriseCV = 0.f, foodCV = 0.f;
@@ -130,11 +138,21 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   gatePrev = gate;
   float dt = args.sampleTime;
   t += dt;
+  randTimer += dt;
+  if (randTimer >= randInterval) {
+    randTimer -= randInterval;
+    randInterval = 0.02f + frand() * 0.06f;
+    ampRandTarget = (frand() * 2.f - 1.f) * (0.2f + foodF * 0.5f);
+    pitchRandTarget = (frand() * 2.f - 1.f) * (0.4f + retentionF * 0.6f);
+  }
+  ampRand += (ampRandTarget - ampRand) * 0.0025f;
+  pitchRand += (pitchRandTarget - pitchRand) * 0.0025f;
   float baseFreq = 120.f - (ageF * 0.7f);
   float attack = 0.08f + (1.f - urgencyF) * 0.15f;
   float decay = 0.5f + (1.f - urgencyF) * 0.5f;
   env = t < attack ? (t / attack) * (0.5f + urgencyF * 0.5f)
                    : std::exp(-(t - attack) / decay);
+  pressureEnv += ((gate ? 1.f : 0.f) - pressureEnv) * (gate ? 0.002f + urgencyF * 0.004f : 0.0008f + (1.f - retentionF) * 0.0012f);
   ampLFOPhase += dt * (0.2f + foodF * 0.3f);
   wrap(ampLFOPhase);
   ampLFO = 0.7f + 0.3f * fastSin(two_pi * ampLFOPhase + frand() * 0.2f);
@@ -146,18 +164,26 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   float pitch =
       baseFreq * pitchLFO *
       (1.f + wideLFO * retentionF * 0.25f + narrowLFO * foodF * 0.08f);
-  phase += pitch * dt;
+  phase += (pitch + pitchRand * pitch * 0.1f) * dt;
   wrap(phase);
   float core = fastTanh(fastSin(two_pi * phase));
   float white = frand() * 2.f - 1.f;
   brown = (brown + 0.02f * white) * 0.98f;
-  float noise = brown * (0.18f + surpriseF * 0.7f);
+  pink1 = 0.997f * pink1 + 0.003f * white;
+  pink2 = 0.985f * pink2 + 0.015f * white;
+  pink3 = 0.95f * pink3 + 0.05f * white;
+  float pink = (pink1 + pink2 + pink3) * 0.3333f;
+  float noiseColor = foodF * 0.6f + 0.2f;
+  float noise = (brown * (1.f - noiseColor) + pink * noiseColor) * (0.18f + surpriseF * 0.7f);
   float wet =
       fastSin(two_pi * phase * (1.5f + foodF * 2.5f)) * (0.12f + foodF * 0.6f);
   if (bubbleEnv < 0.001f &&
       frand() < (0.008f + foodF * 0.03f + surpriseF * 0.01f)) {
-    bubbleEnv = 1.f;
+    bubbleEnv = 0.35f + foodF * 0.65f;
     bubblePhase = 0.f;
+    formantEnv = 0.7f + foodF * 0.3f;
+    formantPhase = 0.f;
+    burstEnv = 0.6f + surpriseF * 0.4f;
   }
   if (bubbleEnv > 0.001f) {
     bubblePhase += dt * (8.f + frand() * 8.f);
@@ -165,12 +191,27 @@ inline void FartSynthson::process(const ProcessArgs& args) {
     float bubble =
         fastSin(two_pi * bubblePhase) * bubbleEnv * (0.2f + foodF * 0.5f);
     noise += bubble;
-    bubbleEnv *= 0.93f - 0.04f * surpriseF;
+    bubbleEnv *= 0.94f - 0.05f * surpriseF;
+  }
+  if (formantEnv > 0.0005f) {
+    float formantFreq = 90.f + foodF * 220.f + retentionF * 70.f;
+    formantPhase += formantFreq * dt;
+    wrap(formantPhase);
+    float ring = fastSin(two_pi * formantPhase) * formantEnv;
+    noise += ring * (0.25f + foodF * 0.35f);
+    formantEnv *= 0.995f - 0.04f * (1.f - retentionF);
+  }
+  if (burstEnv > 0.0005f) {
+    float hiss = white * burstEnv * (0.4f + foodF * 0.4f);
+    noise += hiss;
+    burstEnv *= 0.90f - 0.1f * foodF;
   }
   float sg = 1.f - shameF;
   sg *= sg;
-  float out = (core + noise + wet) * env * sg * ampLFO * 5.f;
-  outputs[AUDIO_OUTPUT].setVoltage(out);
+  float dyn = 0.6f + ampRand * 0.4f;
+  float mix = (core + noise + wet) * env * sg * ampLFO * dyn * (0.7f + pressureEnv * 0.6f);
+  float sat = fastTanh(mix * 1.4f) * 5.2f;
+  outputs[AUDIO_OUTPUT].setVoltage(sat);
 }
 inline void FartSynthson::readKnobs() {
   if (++frameCounter == 64) {
