@@ -79,14 +79,16 @@ private:
     float brown = 0.f;
     float bubbleEnv = 0.f;
     float bubblePhase = 0.f;
+  float bubbleEnvTarget = 0.f;
   float pink1 = 0.f, pink2 = 0.f, pink3 = 0.f;
   float pressureEnv = 0.f;
-  float burstEnv = 0.f;
-  float formantEnv = 0.f;
+  float burstEnv = 0.f, burstEnvTarget = 0.f;
+  float formantEnv = 0.f, formantEnvTarget = 0.f;
   float formantPhase = 0.f;
   float ampRand = 0.f, ampRandTarget = 0.f;
   float pitchRand = 0.f, pitchRandTarget = 0.f;
   float randTimer = 0.f, randInterval = 0.03f;
+  float noiseLP = 0.f;
     bool gatePrev = false;
     float ageV = 50.f, urgencyV = 0.5f, retentionV = 0.5f, shameV = 0.f, surpriseV = 0.5f, foodV = 0.5f;
     float ageCV = 0.f, urgencyCV = 0.f, retentionCV = 0.f, shameCV = 0.f, surpriseCV = 0.f, foodCV = 0.f;
@@ -155,10 +157,10 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   pressureEnv += ((gate ? 1.f : 0.f) - pressureEnv) * (gate ? 0.002f + urgencyF * 0.004f : 0.0008f + (1.f - retentionF) * 0.0012f);
   ampLFOPhase += dt * (0.2f + foodF * 0.3f);
   wrap(ampLFOPhase);
-  ampLFO = 0.7f + 0.3f * fastSin(two_pi * ampLFOPhase + frand() * 0.2f);
+  ampLFO = 0.7f + 0.3f * fastSin(two_pi * ampLFOPhase);
   pitchLFOPhase += dt * (0.12f + retentionF * 0.18f);
   wrap(pitchLFOPhase);
-  pitchLFO = 1.f + 0.08f * fastSin(two_pi * pitchLFOPhase + frand() * 0.3f);
+  pitchLFO = 1.f + 0.08f * fastSin(two_pi * pitchLFOPhase);
   float wideLFO = fastSin(two_pi * t * (0.3f + retentionF * 2.f));
   float narrowLFO = fastSin(two_pi * t * (3.f + foodF * 10.f));
   float pitch =
@@ -177,13 +179,15 @@ inline void FartSynthson::process(const ProcessArgs& args) {
   float noise = (brown * (1.f - noiseColor) + pink * noiseColor) * (0.18f + surpriseF * 0.7f);
   float wet =
       fastSin(two_pi * phase * (1.5f + foodF * 2.5f)) * (0.12f + foodF * 0.6f);
-  if (bubbleEnv < 0.001f &&
-      frand() < (0.008f + foodF * 0.03f + surpriseF * 0.01f)) {
-    bubbleEnv = 0.35f + foodF * 0.65f;
+  if (bubbleEnv < 0.001f && frand() < (0.008f + foodF * 0.03f + surpriseF * 0.01f)) {
+    bubbleEnvTarget = 0.35f + foodF * 0.65f;
     bubblePhase = 0.f;
-    formantEnv = 0.7f + foodF * 0.3f;
+    formantEnvTarget = 0.7f + foodF * 0.3f;
     formantPhase = 0.f;
-    burstEnv = 0.6f + surpriseF * 0.4f;
+    burstEnvTarget = 0.6f + surpriseF * 0.4f;
+  }
+  if (bubbleEnvTarget > 0.f) {
+    bubbleEnv += (bubbleEnvTarget - bubbleEnv) * 0.15f;
   }
   if (bubbleEnv > 0.001f) {
     bubblePhase += dt * (8.f + frand() * 8.f);
@@ -192,6 +196,10 @@ inline void FartSynthson::process(const ProcessArgs& args) {
         fastSin(two_pi * bubblePhase) * bubbleEnv * (0.2f + foodF * 0.5f);
     noise += bubble;
     bubbleEnv *= 0.94f - 0.05f * surpriseF;
+    if (bubbleEnv < 0.002f) { bubbleEnv = 0.f; bubbleEnvTarget = 0.f; }
+  }
+  if (formantEnvTarget > 0.f) {
+    formantEnv += (formantEnvTarget - formantEnv) * 0.08f;
   }
   if (formantEnv > 0.0005f) {
     float formantFreq = 90.f + foodF * 220.f + retentionF * 70.f;
@@ -200,12 +208,20 @@ inline void FartSynthson::process(const ProcessArgs& args) {
     float ring = fastSin(two_pi * formantPhase) * formantEnv;
     noise += ring * (0.25f + foodF * 0.35f);
     formantEnv *= 0.995f - 0.04f * (1.f - retentionF);
+    if (formantEnv < 0.001f) { formantEnv = 0.f; formantEnvTarget = 0.f; }
+  }
+  if (burstEnvTarget > 0.f) {
+    burstEnv += (burstEnvTarget - burstEnv) * 0.2f;
   }
   if (burstEnv > 0.0005f) {
     float hiss = white * burstEnv * (0.4f + foodF * 0.4f);
     noise += hiss;
     burstEnv *= 0.90f - 0.1f * foodF;
+    if (burstEnv < 0.001f) { burstEnv = 0.f; burstEnvTarget = 0.f; }
   }
+  float lpA = std::clamp(8000.f * dt, 0.f, 1.f);
+  noiseLP += (noise - noiseLP) * lpA;
+  noise = noiseLP;
   float sg = 1.f - shameF;
   sg *= sg;
   float dyn = 0.6f + ampRand * 0.4f;
