@@ -2,7 +2,6 @@
 #include <rack.hpp>
 #include <cmath>
 #include <algorithm>
-#include <numbers>
 #include <cstdint>
 
 using rack::componentlibrary::Rogan2PWhite;
